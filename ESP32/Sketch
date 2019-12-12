@@ -1,0 +1,108 @@
+
+
+#include <WiFi.h>
+#include <FirebaseESP32.h>
+#include <ArduinoJson.h>
+
+
+#define FIREBASE_HOST "carbide-eye-251017.firebaseio.com" //Do not include https:// in FIREBASE_HOST
+#define FIREBASE_AUTH "uLfd7AQCsga1DW6cwe5n1u7zCfdRxhzre3aHnhRP"
+#define WIFI_SSID "Particular 2G"
+#define WIFI_PASSWORD "koni1000"
+
+#include "DHT.h"
+#define DHTPIN 27    
+#define DHTTYPE DHT11 
+
+
+uint32_t delayMS;
+
+int prev_temp;
+int prev_humidity;
+
+float t;
+float h;
+
+FirebaseData firebaseData;
+String path = "/ESP32_Device";
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  initWifi();
+  // Set delay between sensor readings based on sensor details.
+  delayMS = 1000;
+}
+
+
+
+void loop() {
+  // Delay between measurements.
+  delay(delayMS);
+    h = dht.readHumidity();
+    t = dht.readTemperature();
+    if (isnan(t) || isnan(h)) 
+    {
+      Serial.println("Failed to read from DHT");
+    } 
+    else
+    {
+      Serial.print("Umidade: ");
+      Serial.print(h);
+      Serial.print("% ");
+      Serial.print("Temperatura: ");
+      Serial.print(t);
+      Serial.println(" C");
+    }
+    delay(1000);
+  updateTemp((int)t);
+  updateHumidity((int)h);
+}
+
+
+void updateTemp(int temp){
+  if(prev_temp != temp){
+    String tempString = "";
+    tempString += temp;
+    tempString += "C";
+    prev_temp = temp;
+
+    Firebase.setDouble(firebaseData, path + "Temperature/Data", temp);
+  }
+}
+
+void updateHumidity(int humidity){
+  if(prev_humidity != humidity){
+    String humidityString = "";
+    humidityString += humidity;
+    humidityString += "%";
+    prev_humidity = humidity;
+
+    Firebase.setDouble(firebaseData, path + "Humidity/Data", humidity);
+  }
+}
+
+void initWifi(){
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(300);
+  }
+  Serial.println();
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  Firebase.reconnectWiFi(true);
+
+  //Set database read timeout to 1 minute (max 15 minutes)
+  Firebase.setReadTimeout(firebaseData, 1000 * 60);
+  //tiny, small, medium, large and unlimited.
+  //Size and its write timeout e.g. tiny (1s), small (10s), medium (30s) and large (60s).
+  Firebase.setwriteSizeLimit(firebaseData, "tiny");
+}
